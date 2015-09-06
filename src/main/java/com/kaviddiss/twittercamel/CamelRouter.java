@@ -53,15 +53,17 @@ public class CamelRouter extends RouteBuilder {
         ;
 
         from(ES_TWEET_INDEXER_ENDPOINT)
-            // store tweets into separate indexes on a weekly basis to make it easier deleting old tweets:
+            // groups tweets into separate indexes on a weekly basis to make it easier clean up old tweets:
             .process(new WeeklyIndexNameHeaderUpdater(ES_TWEET_INDEX_TYPE))
+            // converts Twitter4j Tweet object into an elasticsearch document represented by a Map:
             .process(new ElasticSearchTweetConverter())
-            // batch tweets based on index name:
+            // collects tweets into weekly batches based on index name:
             .aggregate(header("indexName"), new ListAggregationStrategy())
-                // upload batch every 2 seconds
+                // creates new batches every 2 seconds
                 .completionInterval(2000)
-                // make sure to upload last batch before shutdown:
+                // makes sure the last batch will be processed before application shuts down:
                 .forceCompletionOnStop()
+            // inserts a batch of tweets to elasticsearch:
             .to(elasticsearchTweetUri)
             .log("Uploaded documents to ElasticSearch index ${headers.indexName}: ${body.size()}")
         ;
